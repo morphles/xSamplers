@@ -13,28 +13,28 @@ draft, sketch, unfinished, low quality, deformed, disfigured, distorted, blurry,
 (You should be able to load images in ComfyUI to see the full workflow)
 
 Usual size image:  
-[Usual size image](https://raw.githubusercontent.com/morphles/xSamplers/main/img/usual_scale.png)  
+![Usual size image](https://raw.githubusercontent.com/morphles/xSamplers/main/img/usual_scale.png)  
 
 
 Double sized renderings:  
 Usual upscale flow:  
-[Usual upscale flow](https://raw.githubusercontent.com/morphles/xSamplers/main/img/usuale_upscale.png)  
+![Usual upscale flow](https://raw.githubusercontent.com/morphles/xSamplers/main/img/usuale_upscale.png)  
 Rerender using x2Sampler:  
-[Rerender using x2Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/rerender_x2.png)  
+![Rerender using x2Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/rerender_x2.png)  
 Direct x2Sampler render (no original image):  
-[Direct x2Sampler render (no original image)](https://raw.githubusercontent.com/morphles/xSamplers/main/img/direct_x2.png)  
+![Direct x2Sampler render (no original image)](https://raw.githubusercontent.com/morphles/xSamplers/main/img/direct_x2.png)  
   
 Quadruple size renderings:
 Direct x4Sampler render (no original image):  
-[Direct x4Sampler render (no original image)](https://raw.githubusercontent.com/morphles/xSamplers/main/img/direct_x4.png)  
+![Direct x4Sampler render (no original image)](https://raw.githubusercontent.com/morphles/xSamplers/main/img/direct_x4.png)  
 Rerender using x4Sampler:  
-[Rerender using x4Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/rerender_x4.png)  
+![Rerender using x4Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/rerender_x4.png)  
 Upscale and rerender using x2Sampler:  
-[Upscale and rerender using x2Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/upscale_rerender_x2.png)  
+![Upscale and rerender using x2Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/upscale_rerender_x2.png)  
 
 X8 size rendering, really not tweaked, as it just takes very long to render, most likely can be made to be much much better
 Upscale and rerender using x4Sampler:  
-[Upscale and rerender using x4Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/upscale_rerender_x4.png)  
+![Upscale and rerender using x4Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/upscale_rerender_x4.png)  
 
 
 Notes on use:
