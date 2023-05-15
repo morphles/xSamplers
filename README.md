@@ -1,7 +1,14 @@
 # xSamplers
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) alternative high resolution sampling option.
 
-Couple nodes that allow for alternative to "hi-res fix", they sample at multiple resolutions, combining different resolution latient images, this way reducing distortion in high resolution renderings. That's the idea at least, intention was to have higher details rendering capability than high res fix usually allows, and also with less need to fiddle with denoise, between - not enough, no real details added; too much - artifacts and crap appears. I do not think I managed to achieve as good result as initial envisioned, but it is at least interesting alternative that I believe some times gives nicer results. But now you get to fiddle with mixing curve params instead of denoising...
+Couple nodes that allow for alternative to "hi-res fix", they sample at multiple resolutions, combining different resolution latient images, this way reducing distortion in high resolution renderings. That's the idea at least, intention was to have higher details rendering capability than high res fix usually allows, and also with less need to fiddle with denoise, between - not enough, no real details added; too much - artifacts and crap appears. I do not think I managed to achieve as good result as initial envisioned, but it is at least interesting alternative that I believe some times gives nicer results. But now you get to fiddle with mixing curve params instead of denoising...  
+
+# Install
+checkout into ComfyUI custom_nodes folder, and restart ComfyUI.
+
+# Info
+Node preview (for slope/pos params description/helpers see end of description):  
+![Node preview](https://raw.githubusercontent.com/morphles/xSamplers/main/img/node_shot.png)
 
 Some comparison/sample images (not the best, probably cause I'm quite tired from long renders and tweaks, but should convey it somewhat; maybe will update the showcases some time in future).  
 
@@ -18,7 +25,7 @@ Usual size image:
 
 Double sized renderings:  
 Usual upscale flow:  
-![Usual upscale flow](https://raw.githubusercontent.com/morphles/xSamplers/main/img/usuale_upscale.png)  
+![Usual upscale flow](https://raw.githubusercontent.com/morphles/xSamplers/main/img/usual_upscale.png)  
 Rerender using x2Sampler:  
 ![Rerender using x2Sampler](https://raw.githubusercontent.com/morphles/xSamplers/main/img/rerender_x2.png)  
 Direct x2Sampler render (no original image):  
@@ -47,8 +54,8 @@ Notes on use:
  - so I strongly suggest just sticking to fastest sampler - dpmpp_2m
  - you generally do not need to many steps, even 7 can work for some cases for ok results, but I'd say 17 is sorta sweet spot to start experimenting from
  - any scheduler can work depending on prompt/model, but in general normal and simple are the best, with karras being works (which is my general experience overal).
- - upscale method, almost certainly has to be nearest-exact (this is how noises/images are scaled during combination steps), *BUT* bilinear dos some weird stuff, that maybe needs to be looked at by someone smarter than me, see example image (this is not the best sample, but the gist is - it sorta removes background, and manages to render subject quite well; well in this case not particularly well), so it might have some uses, and maybe help with better understanding of models/technology:  
-<img src="https://raw.githubusercontent.com/morphles/xSamplers/main/img/bilinear.png" alt="Bilinear sample image" width="1024">
+ - upscale method, almost certainly has to be nearest-exact (this is how noises/images are scaled during combination steps), *BUT* bilinear dos some weird stuff, that maybe needs to be looked at by someone smarter than me, see example image (this is not the best sample, but the gist is - it sorta removes background, and manages to render subject quite well; well in this case not particularly well), so it might have some uses, and maybe help with better understanding of models/technology: <img src="https://raw.githubusercontent.com/morphles/xSamplers/main/img/bilinear.png" alt="Bilinear sample image" width="1024">
+ - **Side note:** after some more testing, not everything I wrote here seems to be correct, bilinear can work very well with different curve params, as well as ancestral samplers can indeed work with it (pos ~17, slope ~7 seem to work for those), and can even produce good results. So in short, more people need to test and explore it :)
 
 Use mixing curve "widget" (click on image)  
 [<img src="https://raw.githubusercontent.com/morphles/xSamplers/main/img/curve_helper.png" alt="Mixing curve" width="640">](https://www.geogebra.org/calculator/rtcp5qgt)  
