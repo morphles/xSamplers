@@ -9,6 +9,10 @@ import torch
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "comfy"))
 import comfy
 
+def progToMix(prog, pos, slope, shift = 0):
+    return (1 / ( 1 + e**( -( prog + ( pos / ( -100 ) ) ) * slope ) )) + (shift / 100)
+
+
 class x2Sampler:
     @classmethod
     def INPUT_TYPES(s):
@@ -45,8 +49,9 @@ class x2Sampler:
         size_large = (int(((samples.shape[2] * 2) // 8) * 8), int(((samples.shape[3] * 2) // 8) * 8))
 
         samples_up = torch.nn.functional.interpolate(samples, size=size_large, mode=upsample)
-        skip = latent_image["batch_index"] if "batch_index" in latent_image else 0
-        noise_up = comfy.sample.prepare_noise(samples_up, noise_seed, skip)
+        
+        batch_inds = latent_image["batch_index"] if "batch_index" in latent_image else None
+        noise_up = comfy.sample.prepare_noise(samples_up, noise_seed, batch_inds)
         noise = torch.nn.functional.interpolate(noise_up, size=size_small, mode=downsample)
         
 
@@ -71,7 +76,7 @@ class x2Sampler:
 
         for i in trange(end_at_step - start_at_step):
             mix_factor = i / ( end_at_step - start_at_step-1 )
-            mix_factor = 1 / ( 1 + e**( -( mix_factor + ( pos / ( -100 ) ) ) * slope ) )
+            mix_factor = progToMix(mix_factor, pos, slope)
             
             samples = sampler.sample(empty_noise, positive_copy, negative_copy, cfg=cfg, latent_image=samples, start_step=start_at_step + i, last_step=start_at_step + i + 1, force_full_denoise=False, denoise_mask=None, disable_pbar=True)
             diff = samples - torch.nn.functional.interpolate(samples_up, size=size_small, mode=downsample)
@@ -121,8 +126,8 @@ class x4Sampler:
 
         samples_up = torch.nn.functional.interpolate(samples, size=size_large, mode=upscale_method)
         samples_xl = torch.nn.functional.interpolate(samples, size=size_xl, mode=upscale_method)
-        skip = latent_image["batch_index"] if "batch_index" in latent_image else 0
-        noise_xl = comfy.sample.prepare_noise(samples_xl, noise_seed, skip)
+        batch_inds = latent_image["batch_index"] if "batch_index" in latent_image else None
+        noise_xl = comfy.sample.prepare_noise(samples_xl, noise_seed, batch_inds)
         noise_up = torch.nn.functional.interpolate(noise_xl, size=size_large, mode=upscale_method)
         noise = torch.nn.functional.interpolate(noise_up, size=size_small, mode=upscale_method)
         
@@ -152,7 +157,7 @@ class x4Sampler:
 
         for i in trange(end_at_step - start_at_step):
             prog = i / (end_at_step - start_at_step-1)
-            mix_factor = 1 / ( 1 + e ** ( -(prog + pos / (-100) ) * slope ) )
+            mix_factor = progToMix(prog, pos, slope)
 
             samples = sampler.sample(empty_noise, positive_copy, negative_copy, cfg=cfg, latent_image=samples, start_step=start_at_step + i, last_step=start_at_step + i + 1, force_full_denoise=False, denoise_mask=None, disable_pbar=True)
             
