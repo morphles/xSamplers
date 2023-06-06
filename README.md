@@ -7,6 +7,7 @@ Couple nodes that allow for alternative to "hi-res fix", they sample at multiple
 checkout into ComfyUI custom_nodes folder, and restart ComfyUI.
 
 # Info
+**NOTE: lots of info here is somewhat outdated with regards to what I found out from more experiments with this, will update it later. In short use bilinear upscale, and set pos to 120 and slope to 17 for now. those params will likely be removed altogether**
 Node preview (for slope/pos params description/helpers see end of description):  
 ![Node preview](https://raw.githubusercontent.com/morphles/xSamplers/main/img/node_shot.png)
 
