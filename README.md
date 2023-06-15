@@ -1,6 +1,19 @@
 # xSamplers
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) alternative high resolution sampling option.
 
+TL;DR
+scaleSampler - give reasonable latent, set scale => output will be that much bigger than input
+pos 100
+slope 2
+sampler dpmpp_sde @ scale*2 - scale*5 steps OR dpm_adaptive @ scale*1 - scale*3 (also know that adaptive thingie can be very slow)
+cfg_scale - 0
+
+tested up to 9Mpix results, mainly with woman character portraits, which can produce good results. Also some tests with cars in country side, more artsy things seme to be less likely to work out nicely. Will add some images later. Now a bit fed up with all the experimentation to make it work as is.
+
+Main thing is scaleSampler. Which tries to do steps while scaling image, uses high resolution starting noise, downscales it samples, mixes in in higher resolutiont step. Thus trying to "bring out" large scale features of original hight resolution nois. Thats the idea at least. Depending on prompt can work better than regular upscale, depending on prompt and model. Works well with decent number of models, but it seems some anime models, and in particular hentai diffusion mixes dont'. But well, even say revMix can do decent anime style so who cares :). Pos and slope are curve params, for curve see at the bottom. It is used for two things - non linear scaling (not all steps are upscaled by same factor), and if cfg factor is set it is also used to lower cfg at start/smaller scale steps, as that in some cases improves the result, but probably can be kept at 0 for the most part. Pos generally should be 100, and slope something like 0.2 for almost linear steps, or somethign up to 5, or just test with 2. Use only ancestral/sde samplers, and ether simple or uniform schedule, other schedules will almost certainly result in significant blur. Even then you might still get some resudual blur, or "weird artifcats" though renoisning (as in regular high res flow) at same res with advanced sampler fixes it up very nicely. W
+
+# BELOW IS OLD INFO AND SHOULD MOSTLY BE IGNORED
+
 Couple nodes that allow for alternative to "hi-res fix", they sample at multiple resolutions, combining different resolution latient images, this way reducing distortion in high resolution renderings. That's the idea at least, intention was to have higher details rendering capability than high res fix usually allows, and also with less need to fiddle with denoise, between - not enough, no real details added; too much - artifacts and crap appears. I do not think I managed to achieve as good result as initial envisioned, but it is at least interesting alternative that I believe some times gives nicer results. But now you get to fiddle with mixing curve params instead of denoising...  
 
 # Install
