@@ -1,4 +1,4 @@
-from math import e
+from math import e, log10
 import sys
 import os
 
@@ -12,25 +12,28 @@ import comfy
 def progToMix(prog, pos, slope, shift = 0):
     return (1 / ( 1 + e**( -( prog + ( pos / ( -100 ) ) ) * slope ) )) + (shift / 100)
 
-class scaleSampler:
+def progToSigma(prog, slope, sig_max, sig_min):
+    return ((e ** (-((prog ** slope) - 2))) / e - 1) / (e - 1) * (sig_max - sig_min) + sig_min
+
+class scaleSampler_:
     @classmethod
     def INPUT_TYPES(s):
         return {"required":
                     {"model": ("MODEL",),
                     "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                     "upscale_method": (["nearest-exact", "bilinear", "area"], ),
-                    "pos" : ("FLOAT", {"default": 55.0, "min": -200.0, "max": 1200.0, "step": 0.5}),
-                    "slope" : ("FLOAT", {"default": 16.0, "min": -200.0, "max": 1200.0, "step": 0.5}),
+                    "pos" : ("FLOAT", {"default": 55.0, "min": 0.1, "max": 1.0, "step": 0.01}),
+                    "slope" : ("FLOAT", {"default": 16.0, "min": 0.1, "max": 10.0, "step": 0.01}),
                     "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0}),
                     "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
                     "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
                     "positive": ("CONDITIONING", ),
                     "negative": ("CONDITIONING", ),
                     "latent_image": ("LATENT", ),
-                    "ssf": ("FLOAT", {"default": 1.5, "min": 1.01, "max": 4.0, "step": 0.2}),
-                    "maxScale": ("FLOAT", {"default": 4.0, "min": 2.0, "max": 16.0, "step": 0.2}),
+                    "scale_steps": ("INT", {"default": 3, "min": 1, "max": 50, "step": 1}),
+                    "maxScale": ("FLOAT", {"default": 4.0, "min": 1.0, "max": 16.0, "step": 0.2}),
                     "sps": ("INT", {"default": 3, "min": 1, "max": 50, "step": 1}),
-                    "mul_sig": ("FLOAT", {"default": 1.0, "min": 0.001, "max": 2.0, "step": 0.2}),
+                    "sigma_start": ("FLOAT", {"default": 10.0, "min": 0.001, "max": 2000.0, "step": 0.1}),
                     }}
 
     RETURN_TYPES = ("LATENT",)
@@ -38,12 +41,12 @@ class scaleSampler:
 
     CATEGORY = "sampling"
 
-    def sample(self, model, noise_seed, upscale_method, pos, slope, cfg, sampler_name, scheduler, positive, negative, latent_image, ssf, maxScale, sps, mul_sig, denoise=1.0):
-        factors = [1]
-        factor = ssf
-        while factor <= maxScale:
-            factors.append(factor)
-            factor = factor * ssf
+    def sample(self, model, noise_seed, upscale_method, pos, slope, cfg, sampler_name, scheduler, positive, negative, latent_image, scale_steps, maxScale, sps, sigma_start, denoise=1.0):
+        step_size = (maxScale - 1) / scale_steps
+        factors = []
+        for i in range(0, scale_steps):
+            factors.append(i * step_size + 1)
+
 
         device = comfy.model_management.get_torch_device()
         samples = latent_image["samples"]
@@ -53,10 +56,8 @@ class scaleSampler:
             item_size = (int(((samples.shape[2] * f) // 8) * 8), int(((samples.shape[3] * f) // 8) * 8))
             samples_list.append(torch.nn.functional.interpolate(samples, size=item_size, mode=upscale_method).to(device))
 
-        
         batch_inds = latent_image["batch_index"] if "batch_index" in latent_image else None
         result_noise = comfy.sample.prepare_noise(samples_list[-1], noise_seed, batch_inds)
-        
 
         comfy.model_management.load_model_gpu(model)
         real_model = None or model.model
@@ -66,30 +67,52 @@ class scaleSampler:
 
         models = comfy.sample.load_additional_models(positive, negative)
 
-        sampler = comfy.samplers.KSampler(real_model, steps=sps, device=device, sampler=sampler_name, scheduler=scheduler, denoise=denoise, model_options=model.model_options)
-        sampler.sigmas = sampler.sigmas * mul_sig
-        sigmas_orig = sampler.sigmas[0]
-        print(sampler.sigmas)
+        samplers = []
+        for i in factors:
+            samplers.append(comfy.samplers.KSampler(real_model, steps=sps, device=device, sampler=sampler_name, scheduler=scheduler, denoise=denoise, model_options=model.model_options))
+        #print(sampler.sigmas)
+        #sigmas_orig = sampler.sigmas
+        #sampler = comfy.samplers.KSampler(real_model, steps=1, device=device, sampler=sampler_name, scheduler=scheduler, denoise=denoise, model_options=model.model_options)
+        #sampler.sigmas = sampler.sigmas * (sigma_start / sampler.sigmas[0])
         result_noise = result_noise.to(device)
-        for i, s in enumerate(samples_list):
-            s += sampler.sigmas[0] * ([*reversed(factors)][i] / factors[-1]) * comfy.sample.prepare_noise(s, noise_seed, batch_inds).to(device)
+        #for i, s in enumerate(samples_list):
+        #    s += sampler.sigmas[0] * ([*reversed(factors)][i] / factors[-1]) * torch.nn.functional.interpolate(result_noise, size=(s.shape[2], s.shape[3]), mode=upscale_method)
 
         empty_result_noise = torch.zeros_like(result_noise)
 
-        pbar = comfy.utils.ProgressBar(len(factors))
+        pbar = comfy.utils.ProgressBar(sps)
         sampled = []
-        for i, f in enumerate(factors):
-            
-            for j in range(0, sps):
-                prog = ((i - 1) * (j + 1) + (j + 1)) / (len(factors) * sps)
-                sampler.sigmas[0] = sigmas_orig * ([*reversed(factors)][i] / factors[-1])
-                mix_factor = progToMix(prog, pos, slope)
-                if sampled:
-                    diff = sampled[-1] - torch.nn.functional.interpolate(samples_list[i], size=(sampled[-1].shape[2], sampled[-1].shape[3]), mode=upscale_method)
-                    samples_list[i] = samples_list[i] + (torch.nn.functional.interpolate(diff, size=(samples_list[i].shape[2], samples_list[i].shape[3]), mode=upscale_method) * (1-mix_factor))
+        print(len(factors))
+        # simple @ 17
+        # 14.6094, 10.4219, 7.6016, 5.6875, 4.3555, 3.4023, 2.7148, 2.1875, 1.7842, 1.4648, 1.2070, 0.9941, 0.8154, 0.6572, 0.5156, 0.3821, 0.2461,  0.0000
+        # @slope 0.2
+        # 14.6094, 4.6770,  3.5840, 2.9179, 2.4351, 2.0555, 1.7426, 1.4763, 1.2445, 1.0394, 0.8554, 0.6886, 0.5362, 0.3958, 0.2657, 0.1446, 0.0312,
+        # @slope 0.6
+        # 14.6094, 10.5987, 8.8215, 7.5071, 6.4433, 5.5439, 4.7628, 4.0721, 3.4534, 2.8936, 2.3830, 1.9142, 1.4815, 1.0803, 0.7069, 0.3581, 0.0312,
+
+
+        for j in range(0, sps):
+            for i, f in enumerate(factors):
+            #@todo not done
+                #prog = ((i - 1) * (j + 1) + (j + 1)) / (len(factors) * sps - 1)
+                #print(prog)
+                #prev_sigma = sampler.sigmas[0]
+                #sig_factor = progToSigma(prog, slope, sampler.sigma_max, sampler.sigma_min)
+
+                if j == 0:
+                    #sig_factor = sigmas_orig[i]
+                    #sampler.sigmas[0] = sigmas_orig[i]
+                    #sampler.sigmas[0] = sig_factor
+                    #print(sig_factor)
+                    s = samples_list[i]
+                    #s += sampler.sigmas[0] * torch.nn.functional.interpolate(result_noise, size=(s.shape[2], s.shape[3]), mode=upscale_method)
+                    s += torch.nn.functional.interpolate(result_noise, size=(s.shape[2], s.shape[3]), mode=upscale_method)
+                elif sampled:
+                    diff = sampled[i-1] - torch.nn.functional.interpolate(samples_list[i], size=(sampled[i-1].shape[2], sampled[i-1].shape[3]), mode=upscale_method)
+                    samples_list[i] = samples_list[i] + (torch.nn.functional.interpolate(diff, size=(samples_list[i].shape[2], samples_list[i].shape[3]), mode=upscale_method))
 
                 empty_noise = torch.nn.functional.interpolate(empty_result_noise, size=(samples_list[i].shape[2], samples_list[i].shape[3]), mode=upscale_method)
-                sampled.append(sampler.sample(
+                sampled.append(samplers[i].sample(
                     empty_noise,
                     positive_copy,
                     negative_copy,
@@ -101,6 +124,117 @@ class scaleSampler:
                     denoise_mask=None,
                     disable_pbar=True
                 ))
+
+            pbar.update_absolute(j + 1, sps)
+            
+        comfy.sample.cleanup_additional_models(models)
+
+        out = latent_image.copy()
+        out["samples"] = sampled[-1].cpu()
+        return (out, )
+
+
+class scaleSampler:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required":
+                    {"model": ("MODEL",),
+                    "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "pos" : ("FLOAT", {"default": 50.0, "min": -200, "max": 200.0, "step": 0.1}),
+                    "slope" : ("FLOAT", {"default": 4.0, "min": -50, "max": 50.0, "step": 0.1}),
+                    "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0}),
+                    "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
+                    "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
+                    "positive": ("CONDITIONING", ),
+                    "negative": ("CONDITIONING", ),
+                    "latent_image": ("LATENT", ),
+                    "scale_steps": ("INT", {"default": 3, "min": 1, "max": 50, "step": 1}),
+                    "maxScale": ("FLOAT", {"default": 4.0, "min": 1.0, "max": 32.0, "step": 0.2}),
+                    "cfg_scale": ("FLOAT", {"default": 1, "min": -30.0, "max": 30.0, "step": 0.1}),
+                    }}
+
+    RETURN_TYPES = ("LATENT",)
+    FUNCTION = "sample"
+
+    CATEGORY = "sampling"
+
+    def sample(self, model, noise_seed, pos, slope, cfg, sampler_name, scheduler, positive, negative, latent_image, scale_steps, maxScale, cfg_scale, denoise=1.0):
+        slope_min = progToMix(0, pos, slope)
+        slope_max = progToMix(1, pos, slope)
+        factors = []
+        for i in range(0, scale_steps):
+            factors.append(1 + ((progToMix(i / (scale_steps - 1), pos, slope) - slope_min) / (slope_max - slope_min)) * (maxScale - 1))
+        #print(factors)
+
+        device = comfy.model_management.get_torch_device()
+        samples = latent_image["samples"]
+        
+        samples_list = [];
+        for f in factors:
+            item_size = (int(((samples.shape[2] * f) // 8) * 8), int(((samples.shape[3] * f) // 8) * 8))
+            samples_list.append(torch.nn.functional.interpolate(samples, size=item_size, mode="bilinear").to(device))
+
+        batch_inds = latent_image["batch_index"] if "batch_index" in latent_image else None
+        result_noise = comfy.sample.prepare_noise(samples_list[-1], noise_seed, batch_inds)
+
+        comfy.model_management.load_model_gpu(model)
+        real_model = None or model.model
+
+        positive_copy = comfy.sample.broadcast_cond(positive, result_noise.shape[0], device)
+        negative_copy = comfy.sample.broadcast_cond(negative, result_noise.shape[0], device)
+
+        models = comfy.sample.load_additional_models(positive, negative)
+
+        sampler = comfy.samplers.KSampler(real_model, steps=len(factors), device=device, sampler=sampler_name, scheduler=scheduler, denoise=denoise, model_options=model.model_options)
+        sigmas_orig = sampler.sigmas
+        sampler = comfy.samplers.KSampler(real_model, steps=1, device=device, sampler=sampler_name, scheduler=scheduler, denoise=denoise, model_options=model.model_options)
+        result_noise = result_noise.to(device)
+
+        empty_result_noise = torch.zeros_like(result_noise)
+
+        pbar = comfy.utils.ProgressBar(len(factors))
+        sampled = []
+        for i, f in enumerate(factors):
+            prog = i / (len(factors) - 1)
+            prev_sigma = sampler.sigmas[0]
+            cfg_fact = (progToMix(prog, pos, slope) - 0.5) * cfg_scale
+
+            sig_factor = sigmas_orig[i]
+            sampler.sigmas[0] = sig_factor
+
+            if sampled:
+                diff = sampled[-1] / prev_sigma - torch.nn.functional.interpolate(result_noise, size=(sampled[-1].shape[2], sampled[-1].shape[3]), mode="bilinear")
+                result_noise = result_noise + torch.nn.functional.interpolate(diff, size=(result_noise.shape[2], result_noise.shape[3]), mode="bilinear")
+                diff_mean = torch.mean(torch.abs(diff)).item()
+
+            #samples_list[i] = torch.nn.functional.interpolate(result_noise + comfy.sample.prepare_noise(result_noise, noise_seed + 1 + i, batch_inds).to(device) * (sig_factor / sigmas_orig[0]), size=(samples_list[i].shape[2], samples_list[i].shape[3]), mode="bilinear") * sig_factor
+            samples_list[i] = torch.nn.functional.interpolate(
+                result_noise + comfy.sample.prepare_noise(result_noise, noise_seed + 1 + i, batch_inds).to(device) * ((0 if not sampled else diff_mean) * (sig_factor / sigmas_orig[0])),
+                #result_noise + comfy.sample.prepare_noise(result_noise, noise_seed + 1 + i, batch_inds).to(device) * ((sig_factor / sigmas_orig[0])),
+                size=(samples_list[i].shape[2], samples_list[i].shape[3]),
+                mode="bilinear"
+            ) * sig_factor
+            samples_list[i] = samples_list[i] + comfy.sample.prepare_noise(samples_list[i], noise_seed + 7 + i, batch_inds).to(device) * (sig_factor) 
+
+
+            empty_noise = torch.nn.functional.interpolate(empty_result_noise, size=(samples_list[i].shape[2], samples_list[i].shape[3]), mode="bilinear")
+            #DEV before = samples_list[i].clone().detach()
+            ccfg=torch.tensor((cfg + cfg * cfg_fact))
+            sampler.sigmas = sigmas_orig.clone()
+            sampled.append(sampler.sample(
+                empty_noise,
+                positive_copy,
+                negative_copy,
+                cfg=ccfg,
+                latent_image=samples_list[i],
+                start_step=i,
+                last_step=len(factors),
+                force_full_denoise=False,
+                denoise_mask=None,
+                disable_pbar=True
+            ))
+            #DEV removed_by_sampling = torch.mean(torch.abs(before - sampled[-1])).item()
+            #DEV print('s', sig_factor, 'ccfg', ccfg.item(), 'mean', removed_by_sampling, 'dif', 0 if len(sampled) == 1 else diff_mean, (cfg_fact, cfg + cfg * cfg_fact))
 
             pbar.update_absolute(i + 1, len(factors))
             
